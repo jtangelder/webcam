@@ -4,21 +4,6 @@
     <title></title>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js"></script>
     <style>
-        html, body { margin: 0; }
-        .hitarea {
-            width: 80px;
-            height: 80px;
-            position: absolute;
-            border: solid 1px #fff;
-            z-index: 10;
-            text-align: center;
-            color: #fff;
-            font: 60px/80px 'Arial Black';
-        }
-
-        .hitarea.hit {
-            background: #32cd32;
-        }
 
         #webcam, #canvas-source { display: none;}
         #canvas-cutout {
@@ -58,6 +43,9 @@
 
 <script>
 
+    /**
+     * requestAnimFrame polyfill
+     */
     window.requestAnimFrame = (function(){
         return  window.requestAnimationFrame       ||
                 window.webkitRequestAnimationFrame ||
@@ -68,31 +56,6 @@
                     window.setTimeout(callback, 1000 / 40);
                 };
     })();
-
-
-    // get the webcam from the user
-    navigator.webkitGetUserMedia({ video: true },
-        function(stream) {
-            video.src = window.webkitURL.createObjectURL(stream);
-            tick();
-        },
-        function(e) { alert('Webcam error!', e); }
-    );
-
-    $("form input").change(function() {
-        var form = this.form;
-        replace = [parseInt(form.red.value), parseInt(form.green.value), parseInt(form.blue.value)];
-
-        setPreviewColor(replace[0], replace[1], replace[2]);
-
-        threshold = parseFloat(form.threshold.value);
-    });
-
-    function setPreviewColor(r,g,b) {
-        $("form .preview").css({
-            backgroundColor: 'rgb('+ r +','+ g +','+ b +')'
-        })
-    }
 
 
     var img = $('#img')[0];
@@ -106,8 +69,20 @@
     var threshold = .05;
 
 
+    // get the webcam from the user
+    navigator.webkitGetUserMedia({ video: true },
+            function(stream) {
+                video.src = window.webkitURL.createObjectURL(stream);
+                tick();
+            },
+            function(e) { alert('Webcam error!', e); }
+    );
+
+
+    // mirror the webcam!
     contextSource.translate(canvasSource.width, 0);
     contextSource.scale(-1, 1);
+
 
     /**
      * ticker for movement detection
@@ -135,6 +110,9 @@
         return Math.min(1000, Math.exp(distance * threshold));
     }
 
+    /**
+     * do the green screen magic
+     */
     function greenScreen() {
         var pixels = contextSource.getImageData(0, 0, 640, 480);
         var length = pixels.data.length / 4;
@@ -152,6 +130,18 @@
 
 
     /**
+     * set preview color
+     * @param   int     r
+     * @param   int     g
+     * @param   int     b
+     */
+    function setPreviewColor(r,g,b) {
+        $("form .preview").css({
+            backgroundColor: 'rgb('+ r +','+ g +','+ b +')'
+        })
+    }
+
+    /**
      * color picker
      * @param   int     x
      * @param   int     y
@@ -166,6 +156,7 @@
         return [r,g,b];
     }
 
+    // colorpicker
     $(canvasCutout).on("mousedown", function(ev) {
         replace = getColorAtPoint(ev.offsetX, ev.offsetY );
 
@@ -176,6 +167,16 @@
         form.green.value = replace[1];
         form.blue.value = replace[2];
     });
+
+
+    // sliders
+    $("form input").change(function() {
+        var form = this.form;
+        replace = [parseInt(form.red.value), parseInt(form.green.value), parseInt(form.blue.value)];
+        setPreviewColor(replace[0], replace[1], replace[2]);
+        threshold = parseFloat(form.threshold.value);
+    });
+
 
 
 
