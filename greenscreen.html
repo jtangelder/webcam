@@ -24,6 +24,7 @@
         #canvas-cutout {
             background: url(http://tekstovi-pesama.com/g_img2/0/b/2777/bassie%2520en%2520adriaan-6.jpg);
             background-size: cover;
+            cursor: crosshair;
         }
         #container {
             position: relative;
@@ -82,12 +83,16 @@
         var form = this.form;
         replace = [parseInt(form.red.value), parseInt(form.green.value), parseInt(form.blue.value)];
 
-        $("form .preview").css({
-            backgroundColor: 'rgb('+ replace[0] +','+ replace[1] +','+ replace[2] +')'
-        })
+        setPreviewColor(replace[0], replace[1], replace[2]);
 
         threshold = parseFloat(form.threshold.value);
     });
+
+    function setPreviewColor(r,g,b) {
+        $("form .preview").css({
+            backgroundColor: 'rgb('+ r +','+ g +','+ b +')'
+        })
+    }
 
 
     var img = $('#img')[0];
@@ -110,15 +115,8 @@
     function tick() {
         contextSource.drawImage(video, 0, 0, 640, 480);
         greenScreen();
-
         window.requestAnimFrame(tick);
     }
-
-/**
-    function init() {
-        contextSource.drawImage(img, 0, 0, 428, 476);
-        greenScreen();
-    }*/
 
     /**
      * get alpha
@@ -152,6 +150,32 @@
         contextCutout.putImageData(pixels, 0, 0);
     }
 
+
+    /**
+     * color picker
+     * @param   int     x
+     * @param   int     y
+     * @return  array   [r,g,b]
+     */
+    function getColorAtPoint(x, y) {
+        var pixels = contextSource.getImageData(x, y, 1, 1);
+        var r = pixels.data[0];
+        var g = pixels.data[1];
+        var b = pixels.data[2];
+
+        return [r,g,b];
+    }
+
+    $(canvasCutout).on("mousedown", function(ev) {
+        replace = getColorAtPoint(ev.offsetX, ev.offsetY );
+
+        setPreviewColor(replace[0], replace[1], replace[2]);
+
+        var form = $("form")[0];
+        form.red.value = replace[0];
+        form.green.value = replace[1];
+        form.blue.value = replace[2];
+    });
 
 
 
