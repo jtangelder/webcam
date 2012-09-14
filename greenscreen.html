@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js"></script>
+    <style>
+        html, body { margin: 0; }
+        .hitarea {
+            width: 80px;
+            height: 80px;
+            position: absolute;
+            border: solid 1px #fff;
+            z-index: 10;
+            text-align: center;
+            color: #fff;
+            font: 60px/80px 'Arial Black';
+        }
+
+        .hitarea.hit {
+            background: #32cd32;
+        }
+
+        #webcam, #canvas-source { display: none;}
+        #canvas-cutout {
+            background: url(http://tekstovi-pesama.com/g_img2/0/b/2777/bassie%2520en%2520adriaan-6.jpg);
+            background-size: cover;
+        }
+        #container {
+            position: relative;
+        }
+
+        form .preview {
+            border:solid 1px #000;
+            width:60px;
+            height: 60px;
+            float: left;
+            margin-right: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<form>
+    <div class="preview"></div>
+    R: <input id="color_red" name="red" type="range" min="0" max="255"><br>
+    G: <input id="color_green" name="green" type="range" min="0" max="255"><br>
+    B: <input id="color_blue" name="blue" type="range" min="0" max="255"><br>
+    threshold: <input id="threshold" name="threshold" type="range" min="0" step="0.001" max="0.2"><br>
+</form>
+
+<div id="container">
+    <video id="webcam" autoplay width="640" height="480"></video>
+    <!--<img id="img" src="img4.jpg" width="428" height="476">-->
+    <canvas id="canvas-source" width="640" height="480"></canvas>
+    <canvas id="canvas-cutout" width="640" height="480"></canvas>
+</div>
+
+<script>
+
+    window.requestAnimFrame = (function(){
+        return  window.requestAnimationFrame       ||
+                window.webkitRequestAnimationFrame ||
+                window.mozRequestAnimationFrame    ||
+                window.oRequestAnimationFrame      ||
+                window.msRequestAnimationFrame     ||
+                function( callback ){
+                    window.setTimeout(callback, 1000 / 40);
+                };
+    })();
+
+
+    // get the webcam from the user
+    navigator.webkitGetUserMedia({ video: true },
+        function(stream) {
+            video.src = window.webkitURL.createObjectURL(stream);
+            tick();
+        },
+        function(e) { alert('Webcam error!', e); }
+    );
+
+    $("form input").change(function() {
+        var form = this.form;
+        replace = [parseInt(form.red.value), parseInt(form.green.value), parseInt(form.blue.value)];
+
+        $("form .preview").css({
+            backgroundColor: 'rgb('+ replace[0] +','+ replace[1] +','+ replace[2] +')'
+        })
+
+        threshold = parseFloat(form.threshold.value);
+    });
+
+
+    var img = $('#img')[0];
+    var video = $('#webcam')[0];
+    var canvasSource = $("#canvas-source")[0];
+    var canvasCutout = $("#canvas-cutout")[0];
+    var contextSource = canvasSource.getContext('2d');
+    var contextCutout = canvasCutout.getContext('2d');
+
+    var replace = [0x9a, 0xab, 0xa8];   // rgb
+    var threshold = .05;
+
+
+    contextSource.translate(canvasSource.width, 0);
+    contextSource.scale(-1, 1);
+
+    /**
+     * ticker for movement detection
+     */
+    function tick() {
+        contextSource.drawImage(video, 0, 0, 640, 480);
+        greenScreen();
+
+        window.requestAnimFrame(tick);
+    }
+
+/**
+    function init() {
+        contextSource.drawImage(img, 0, 0, 428, 476);
+        greenScreen();
+    }*/
+
+    /**
+     * get alpha
+     * @param   array   [r,g,b]
+     * @return  number  alpha
+     */
+    function getAlpha(color) {
+        var distance = Math.pow(
+            (replace[0] - color[0]) *
+            (replace[0] - color[0]) +
+            (replace[1] - color[1]) *
+            (replace[1] - color[1]) +
+            (replace[2] - color[2]) *
+            (replace[2] - color[2]), 0.5 );
+
+        return Math.min(1000, Math.exp(distance * threshold));
+    }
+
+    function greenScreen() {
+        var pixels = contextSource.getImageData(0, 0, 640, 480);
+        var length = pixels.data.length / 4;
+
+        for (var i=0; i<length; i++) {
+            var r = pixels.data[i*4 + 0];
+            var g = pixels.data[i*4 + 1];
+            var b = pixels.data[i*4 + 2];
+
+            pixels.data[i*4 + 3] = getAlpha([r,g,b]);
+        }
+
+        contextCutout.putImageData(pixels, 0, 0);
+    }
+
+
+
+
+</script>
+
+</body>
+</html>

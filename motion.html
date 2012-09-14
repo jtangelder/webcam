@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js"></script>
+    <style>
+        html, body { margin: 0; }
+        .hitarea {
+            width: 80px;
+            height: 80px;
+            position: absolute;
+            border: solid 1px #fff;
+            z-index: 10;
+            text-align: center;
+            color: #fff;
+            font: 60px/80px 'Arial Black';
+        }
+
+        .hitarea.hit {
+            background: #32cd32;
+        }
+
+        #container {
+            width: 640px;
+            height: 480px;
+            position: relative;
+        }
+
+        #webcam, #canvas-source { display: none; }
+
+        #area1 { left: 4%; top: 4%; }
+        #area2 { right: 4%; top: 4%; }
+        #area3 { left: 4%; bottom: 4%; }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <video id="webcam" autoplay width="100%" height="100%"></video>
+    <canvas id="canvas-source" width="640" height="480"></canvas>
+    <canvas id="canvas-blended" width="640" height="480"></canvas>
+
+    <div class="hitarea" id="area1">1</div>
+    <div class="hitarea" id="area2">2</div>
+    <div class="hitarea" id="area3">3</div>
+</div>
+
+<script>
+
+
+    var timeOut, lastImageData;
+    var video = $('#webcam')[0];
+    var canvasSource = $("#canvas-source")[0];
+    var canvasBlended = $("#canvas-blended")[0];
+    var contextSource = canvasSource.getContext('2d');
+    var contextBlended = canvasBlended.getContext('2d');
+    var hitareas = [];
+    var scaleRatio = 0;
+
+
+    // get the webcam from the user
+    navigator.webkitGetUserMedia({ video: true },
+        function(stream) {
+            video.src = window.webkitURL.createObjectURL(stream);
+            webcamReady();
+        },
+        function(e) { alert('Webcam error!', e); }
+    );
+
+
+    // webcam is ready
+    function webcamReady() {
+        contextSource.translate(canvasSource.width, 0);
+        contextSource.scale(-1, 1);
+
+        scaleRatio = canvasSource.width / $(video).width();
+
+        getHitareas();
+        tick();
+    }
+
+
+    /**
+     * collect all the hitareas
+     */
+    function getHitareas() {
+        $(".hitarea").each(function() {
+            var el = $(this);
+            var pos = el.position();
+
+            hitareas.push({
+                ready   : true,
+                el      : el,
+                area    : {
+                    x       : pos.left * scaleRatio,
+                    y       : pos.top * scaleRatio,
+                    width   : el.width() * scaleRatio,
+                    height  : el.height() * scaleRatio
+                }
+            });
+        });
+    }
+
+
+    /**
+     * ticker for movement detection
+     */
+    function tick() {
+        contextSource.drawImage(video, 0, 0, 640, 480);
+
+        blend();
+        checkAreas();
+
+        window.webkitRequestAnimationFrame(tick);
+    }
+
+
+    /**
+     * fast equivalent to Math.abs();
+     * @param value
+     * @return {*}
+     */
+    function fastAbs(value) {
+        return (value ^ (value >> 31)) - (value >> 31);
+    }
+
+    /**
+     * make black or white
+     * @param   number  value
+     * @return  number
+     */
+    function threshold(value) {
+        return (value > 25) ? 0xFF : 0;
+    }
+
+
+    /**
+     * blend two images into a new imageData
+     * @param   imageData   target
+     * @param   imageData   data1
+     * @param   imageData   data2
+     */
+    function differenceAccuracy(target, data1, data2) {
+        if (data1.length != data2.length)
+            return null;
+        var i = 0;
+        var length = (data1.length * 0.25);
+        while (i < length) {
+            var average1 = (data1[4*i] + data1[4*i+1] + data1[4*i+2]) / 3;
+            var average2 = (data2[4*i] + data2[4*i+1] + data2[4*i+2]) / 3;
+            var diff = threshold(fastAbs(average1 - average2));
+            target[4*i] = diff;
+            target[4*i+1] = diff;
+            target[4*i+2] = diff;
+            target[4*i+3] = 0xFF;
+            ++i;
+        }
+    }
+
+
+    /**
+     * blend the webcam data together
+     */
+    function blend() {
+        var width = canvasSource.width;
+        var height = canvasSource.height;
+
+        // get webcam image data
+        var sourceData = contextSource.getImageData(0, 0, width, height);
+
+        // create an image if the previous image doesn’t exist
+        if (!lastImageData)
+            lastImageData = contextSource.getImageData(0, 0, width, height);
+
+        // create a ImageData instance to receive the blended result
+        var blendedData = contextSource.createImageData(width, height);
+
+        // blend the 2 images
+        differenceAccuracy(blendedData.data, sourceData.data, lastImageData.data);
+
+        // draw the result in a canvas
+        contextBlended.putImageData(blendedData, 0, 0);
+
+        // store the current webcam image
+        lastImageData = sourceData;
+    }
+
+
+    /**
+     * check if the areas are hit
+     */
+    function checkAreas() {
+        // loop over the note areas
+        for (var r=0; r<hitareas.length; ++r) {
+            var hitarea = hitareas[r];
+
+            // get the pixels in a note area from the blended image
+            var blendedData = contextBlended.getImageData(
+                    hitarea.area.x,
+                    hitarea.area.y,
+                    hitarea.area.width,
+                    hitarea.area.height);
+
+            var i = 0;
+            var average = 0;
+
+            // loop over the pixels
+            while (i < (blendedData.data.length / 4)) {
+                // make an average between the color channel
+                average += (blendedData.data[i*4] + blendedData.data[i*4+1] + blendedData.data[i*4+2]) / 3;
+                ++i;
+            }
+
+            // calculate an average between of the color values of the note area
+            average = Math.round(average / (blendedData.data.length / 4));
+
+            // over a small limit, consider that a movement is detected
+            if (average > 20) {
+                hit(r, average);
+            }
+        }
+    }
+
+    /**
+     * hit!
+     * @param   hitarea     index
+     * @param   number      hit
+     */
+    function hit(index, average) {
+        var hitarea = hitareas[index];
+        if(hitarea.ready) {
+            hitarea.ready = false;
+            hitarea.el.addClass("hit");
+
+            setTimeout(function() {
+                hitarea.ready = true;
+                hitarea.el.removeClass("hit");
+            }, 500);
+        }
+    }
+
+</script>
+
+</body>
+</html>
